@@ -422,10 +422,10 @@ class TMDBDatasetCollector:
         print(f"🎬 MOVIES WITH 200+ VOTES: {len(self.movies_data):,}")
         
         print(f"\n💡 NEXT STEPS:")
-        print("1. Load datasets using pandas: pd.read_csv('data/filename.csv')")
+        print("1. Load datasets using pandas: pd.read_csv('../../data/filename.csv')")
         print("2. Explore data with df.head(), df.info(), df.describe()")
-        print("3. Start building content-based recommender using data/movies_info.csv")
-        print("4. Build collaborative filtering using data/user_ratings.csv")
+        print("3. Start building content-based recommender using ../../data/movies_info.csv")
+        print("4. Build collaborative filtering using ../../data/user_ratings.csv")
         print("5. Combine both approaches for hybrid recommendations")
 
 def main():
@@ -435,7 +435,7 @@ def main():
     print("🎭 TMDB 4 CORE DATASETS COLLECTOR")
     print("=" * 50)
     print("Target: Movies with 200+ votes")
-    print("Output: 4 CSV files in data/ directory for movie recommender system")
+    print("Output: 4 CSV files in ../../data/ directory for movie recommender system")
     print()
     
     if tmdb.API_KEY == '' or tmdb.API_KEY == 'YOUR_API_KEY_HERE':
@@ -444,8 +444,10 @@ def main():
         print("Set it as TMDB_API_KEY environment variable or in .env file")
         return
     
-    # Initialize collector with data/ output directory
-    collector = TMDBDatasetCollector(min_vote_count=200, max_movies=12000, output_dir='data')
+    # Initialize collector with correct output directory path
+    # Since this script is in movie_rec_sys/get_data/, we need to go up two levels to reach movie_rec_sys/data/
+    output_dir = os.path.join('..', '..', 'data')
+    collector = TMDBDatasetCollector(min_vote_count=200, max_movies=12000, output_dir=output_dir)
     
     try:
         # Step 1: Collect movies with 200+ votes
@@ -473,7 +475,7 @@ def main():
         # Step 6: Generate summary report
         collector.generate_summary_report()
         
-        print(f"\n🎉 SUCCESS! All 4 datasets collected successfully in data/ directory!")
+        print(f"\n🎉 SUCCESS! All 4 datasets collected successfully in ../../data/ directory!")
         print("Ready to build your movie recommender system!")
         
     except Exception as e:
