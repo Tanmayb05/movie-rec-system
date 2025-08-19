@@ -7,7 +7,7 @@ from datetime import datetime
 import os
 
 # Set your TMDB API key
-tmdb.API_KEY = 'cd5d2791e18523a32f05e2742dbb7269'  # Replace with your actual API key
+tmdb.API_KEY = # Replace with your actual API key
 
 class TMDBDatasetCollector:
     def __init__(self, min_vote_count=200, max_movies=15000):
