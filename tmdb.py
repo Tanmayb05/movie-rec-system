@@ -1,4 +1,7 @@
 import tmdbsimple as tmdb
+from dotenv import load_dotenv
+import os
+
 import pandas as pd
 import time
 import json
@@ -6,8 +9,8 @@ import numpy as np
 from datetime import datetime
 import os
 
-# Set your TMDB API key
-tmdb.API_KEY = ''# Replace with your actual API key
+load_dotenv()
+tmdb.API_KEY = os.getenv('TMDB_API_KEY', '')
 
 class TMDBDatasetCollector:
     def __init__(self, min_vote_count=200, max_movies=15000):
