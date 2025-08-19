@@ -1,7 +1,6 @@
 import tmdbsimple as tmdb
 from dotenv import load_dotenv
 import os
-
 import pandas as pd
 import time
 import json
@@ -13,12 +12,16 @@ load_dotenv()
 tmdb.API_KEY = os.getenv('TMDB_API_KEY', '')
 
 class TMDBDatasetCollector:
-    def __init__(self, min_vote_count=200, max_movies=15000):
+    def __init__(self, min_vote_count=200, max_movies=15000, output_dir='data'):
         self.min_vote_count = min_vote_count
         self.max_movies = max_movies
+        self.output_dir = output_dir
         self.movies_data = []
         self.ratings_data = []
         self.metadata_data = []
+        
+        # Create output directory if it doesn't exist
+        os.makedirs(self.output_dir, exist_ok=True)
         
     def collect_movies_with_200_votes(self):
         """
@@ -41,21 +44,24 @@ class TMDBDatasetCollector:
                     page=page
                 )
                 
-                if not discover.results:
+                # Access results from the response
+                results = response.get('results', [])
+                if not results:
                     print("No more results found.")
                     break
                 
-                for movie in discover.results:
+                for movie in results:
                     if total_collected >= self.max_movies:
                         break
                     
                     self.movies_data.append(movie)
                     total_collected += 1
                 
-                print(f"   • Collected {len(discover.results)} movies (Total: {total_collected})")
+                print(f"   • Collected {len(results)} movies (Total: {total_collected})")
                 
                 # Check if we've reached the last page
-                if page >= discover.total_pages or page >= 500:  # API limit
+                total_pages = response.get('total_pages', 1)
+                if page >= total_pages or page >= 500:  # API limit
                     break
                 
                 page += 1
@@ -79,6 +85,7 @@ class TMDBDatasetCollector:
         movies_info = []
         
         for i, movie in enumerate(self.movies_data):
+            movie_id = None
             try:
                 movie_id = movie['id']
                 
@@ -124,14 +131,15 @@ class TMDBDatasetCollector:
                 time.sleep(0.05)  # Rate limiting
                 
             except Exception as e:
-                print(f"   ⚠️  Error processing movie {movie_id}: {e}")
+                print(f"   ⚠️  Error processing movie {movie_id if movie_id else 'unknown'}: {e}")
                 continue
         
-        # Create DataFrame
+        # Create DataFrame and save to data/ directory
         movies_df = pd.DataFrame(movies_info)
-        movies_df.to_csv('movies_info.csv', index=False)
+        output_path = os.path.join(self.output_dir, 'movies_info.csv')
+        movies_df.to_csv(output_path, index=False)
         print(f"✅ Movies Info Dataset saved: {len(movies_df)} movies")
-        print(f"   📁 File: movies_info.csv ({movies_df.shape})")
+        print(f"   📁 File: {output_path} ({movies_df.shape})")
         
         return movies_df
 
@@ -146,6 +154,7 @@ class TMDBDatasetCollector:
         ratings_data = []
         
         for i, movie in enumerate(self.movies_data):
+            movie_id = None
             try:
                 movie_id = movie['id']
                 
@@ -173,14 +182,15 @@ class TMDBDatasetCollector:
                 time.sleep(0.02)
                 
             except Exception as e:
-                print(f"   ⚠️  Error processing ratings for movie {movie_id}: {e}")
+                print(f"   ⚠️  Error processing ratings for movie {movie_id if movie_id else 'unknown'}: {e}")
                 continue
         
-        # Create DataFrame
+        # Create DataFrame and save to data/ directory
         ratings_df = pd.DataFrame(ratings_data)
-        ratings_df.to_csv('movie_ratings.csv', index=False)
+        output_path = os.path.join(self.output_dir, 'movie_ratings.csv')
+        ratings_df.to_csv(output_path, index=False)
         print(f"✅ Movie Ratings Dataset saved: {len(ratings_df)} movies")
-        print(f"   📁 File: movie_ratings.csv ({ratings_df.shape})")
+        print(f"   📁 File: {output_path} ({ratings_df.shape})")
         
         return ratings_df
 
@@ -195,6 +205,7 @@ class TMDBDatasetCollector:
         metadata_list = []
         
         for i, movie in enumerate(self.movies_data):
+            movie_id = None
             try:
                 movie_id = movie['id']
                 movie_obj = tmdb.Movies(movie_id)
@@ -205,10 +216,10 @@ class TMDBDatasetCollector:
                 # Get external IDs
                 try:
                     external_ids = movie_obj.external_ids()
-                    imdb_id = getattr(movie_obj, 'imdb_id', '')
-                    facebook_id = getattr(movie_obj, 'facebook_id', '')
-                    instagram_id = getattr(movie_obj, 'instagram_id', '')
-                    twitter_id = getattr(movie_obj, 'twitter_id', '')
+                    imdb_id = external_ids.get('imdb_id', '')
+                    facebook_id = external_ids.get('facebook_id', '')
+                    instagram_id = external_ids.get('instagram_id', '')
+                    twitter_id = external_ids.get('twitter_id', '')
                 except:
                     imdb_id = facebook_id = instagram_id = twitter_id = ''
                 
@@ -222,15 +233,17 @@ class TMDBDatasetCollector:
                 
                 # Get videos/trailers
                 try:
-                    videos = movie_obj.videos()
-                    video_keys = '|'.join([video['key'] for video in getattr(movie_obj, 'results', [])[:3]])  # Top 3 videos
+                    videos_response = movie_obj.videos()
+                    video_results = videos_response.get('results', [])
+                    video_keys = '|'.join([video['key'] for video in video_results[:3]])  # Top 3 videos
                 except:
                     video_keys = ''
                 
                 # Get keywords
                 try:
-                    keywords = movie_obj.keywords()
-                    keyword_list = '|'.join([kw['name'] for kw in getattr(movie_obj, 'keywords', [])[:10]])  # Top 10 keywords
+                    keywords_response = movie_obj.keywords()
+                    keyword_results = keywords_response.get('keywords', [])
+                    keyword_list = '|'.join([kw['name'] for kw in keyword_results[:10]])  # Top 10 keywords
                 except:
                     keyword_list = ''
                 
@@ -270,14 +283,15 @@ class TMDBDatasetCollector:
                 time.sleep(0.1)  # More delay for multiple API calls
                 
             except Exception as e:
-                print(f"   ⚠️  Error processing metadata for movie {movie_id}: {e}")
+                print(f"   ⚠️  Error processing metadata for movie {movie_id if movie_id else 'unknown'}: {e}")
                 continue
         
-        # Create DataFrame
+        # Create DataFrame and save to data/ directory
         metadata_df = pd.DataFrame(metadata_list)
-        metadata_df.to_csv('movie_metadata.csv', index=False)
+        output_path = os.path.join(self.output_dir, 'movie_metadata.csv')
+        metadata_df.to_csv(output_path, index=False)
         print(f"✅ Movie Metadata Dataset saved: {len(metadata_df)} movies")
-        print(f"   📁 File: movie_metadata.csv ({metadata_df.shape})")
+        print(f"   📁 File: {output_path} ({metadata_df.shape})")
         
         return metadata_df
 
@@ -362,12 +376,13 @@ class TMDBDatasetCollector:
             if user_id % 100 == 0:
                 print(f"   • Generated ratings for {user_id}/{num_users} users")
         
-        # Create DataFrame
+        # Create DataFrame and save to data/ directory
         user_ratings_df = pd.DataFrame(user_ratings)
-        user_ratings_df.to_csv('user_ratings.csv', index=False)
+        output_path = os.path.join(self.output_dir, 'user_ratings.csv')
+        user_ratings_df.to_csv(output_path, index=False)
         
         print(f"✅ User Ratings Dataset saved: {len(user_ratings_df)} ratings")
-        print(f"   📁 File: user_ratings.csv ({user_ratings_df.shape})")
+        print(f"   📁 File: {output_path} ({user_ratings_df.shape})")
         print(f"   📊 {num_users} users, avg {len(user_ratings_df)/num_users:.1f} ratings per user")
         
         return user_ratings_df
@@ -380,24 +395,24 @@ class TMDBDatasetCollector:
         print("=" * 60)
         
         datasets = [
-            ('movies_info.csv', 'Movies Information'),
-            ('movie_ratings.csv', 'Movie Ratings Summary'),
-            ('movie_metadata.csv', 'Movie Metadata'),
-            ('user_ratings.csv', 'User Ratings (Simulated)')
+            (os.path.join(self.output_dir, 'movies_info.csv'), 'Movies Information'),
+            (os.path.join(self.output_dir, 'movie_ratings.csv'), 'Movie Ratings Summary'),
+            (os.path.join(self.output_dir, 'movie_metadata.csv'), 'Movie Metadata'),
+            (os.path.join(self.output_dir, 'user_ratings.csv'), 'User Ratings (Simulated)')
         ]
         
         total_size = 0
         
-        for filename, description in datasets:
-            if os.path.exists(filename):
-                size_mb = os.path.getsize(filename) / (1024 * 1024)
+        for filepath, description in datasets:
+            if os.path.exists(filepath):
+                size_mb = os.path.getsize(filepath) / (1024 * 1024)
                 total_size += size_mb
                 
                 # Load and get basic stats
-                df = pd.read_csv(filename)
+                df = pd.read_csv(filepath)
                 
                 print(f"\n📁 {description}:")
-                print(f"   • File: {filename}")
+                print(f"   • File: {filepath}")
                 print(f"   • Size: {size_mb:.2f} MB")
                 print(f"   • Rows: {len(df):,}")
                 print(f"   • Columns: {len(df.columns)}")
@@ -407,10 +422,10 @@ class TMDBDatasetCollector:
         print(f"🎬 MOVIES WITH 200+ VOTES: {len(self.movies_data):,}")
         
         print(f"\n💡 NEXT STEPS:")
-        print("1. Load datasets using pandas: pd.read_csv('filename.csv')")
+        print("1. Load datasets using pandas: pd.read_csv('data/filename.csv')")
         print("2. Explore data with df.head(), df.info(), df.describe()")
-        print("3. Start building content-based recommender using movies_info.csv")
-        print("4. Build collaborative filtering using user_ratings.csv")
+        print("3. Start building content-based recommender using data/movies_info.csv")
+        print("4. Build collaborative filtering using data/user_ratings.csv")
         print("5. Combine both approaches for hybrid recommendations")
 
 def main():
@@ -420,16 +435,17 @@ def main():
     print("🎭 TMDB 4 CORE DATASETS COLLECTOR")
     print("=" * 50)
     print("Target: Movies with 200+ votes")
-    print("Output: 4 CSV files for movie recommender system")
+    print("Output: 4 CSV files in data/ directory for movie recommender system")
     print()
     
-    if tmdb.API_KEY == 'YOUR_API_KEY_HERE':
-        print("❌ Please set your TMDB API key in the script!")
+    if tmdb.API_KEY == '' or tmdb.API_KEY == 'YOUR_API_KEY_HERE':
+        print("❌ Please set your TMDB API key!")
         print("Get your API key from: https://www.themoviedb.org/settings/api")
+        print("Set it as TMDB_API_KEY environment variable or in .env file")
         return
     
-    # Initialize collector
-    collector = TMDBDatasetCollector(min_vote_count=200, max_movies=12000)
+    # Initialize collector with data/ output directory
+    collector = TMDBDatasetCollector(min_vote_count=200, max_movies=12000, output_dir='data')
     
     try:
         # Step 1: Collect movies with 200+ votes
@@ -457,7 +473,7 @@ def main():
         # Step 6: Generate summary report
         collector.generate_summary_report()
         
-        print(f"\n🎉 SUCCESS! All 4 datasets collected successfully!")
+        print(f"\n🎉 SUCCESS! All 4 datasets collected successfully in data/ directory!")
         print("Ready to build your movie recommender system!")
         
     except Exception as e:
